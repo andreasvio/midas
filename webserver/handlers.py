@@ -1,7 +1,8 @@
 import tornado.gen as gen
-from tornado.web import RequestHandler
+import tornado.web
+import tornado.websocket
 
-class HelloWorld(RequestHandler):
+class HelloWorld(tornado.web.RequestHandler):
     def set_default_headers(self):
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
@@ -13,3 +14,22 @@ class HelloWorld(RequestHandler):
 
         self.write(json_string)
 
+class WebsocketHandler(tornado.websocket.WebSocketHandler):
+    def open(self):
+        pass
+ 
+    def on_message(self, message):
+        self.write_message(u"Your message was: " + message)
+ 
+    def on_close(self):
+        pass
+
+class TransactionsHandler(tornado.websocket.WebSocketHandler):
+    def open(self):
+        pass
+ 
+    def on_message(self, message):
+        self.write_message(u"Your message was: " + message)
+ 
+    def on_close(self):
+        pass

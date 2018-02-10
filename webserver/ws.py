@@ -11,6 +11,8 @@ def main():
     tornado.options.parse_command_line()
     application = tornado.web.Application([
         (r"/hello/", handlers.HelloWorld),
+        (r"/websocket/", handlers.WebsocketHandler),
+        (r"/transactions/", handlers.TransactionsHandler),
     ])
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(options.port)
