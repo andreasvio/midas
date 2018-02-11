@@ -1,35 +1,6 @@
-import tornado.gen as gen
-import tornado.web
-import tornado.websocket
+from aiohttp import web
 
-class HelloWorld(tornado.web.RequestHandler):
-    def set_default_headers(self):
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-
-    @gen.coroutine
-    def get(self):
-        json_string = '{"first_name": "R", "last_name":"G"}'
-
-        self.write(json_string)
-
-class WebsocketHandler(tornado.websocket.WebSocketHandler):
-    def open(self):
-        pass
- 
-    def on_message(self, message):
-        self.write_message(u"Your message was: " + message)
- 
-    def on_close(self):
-        pass
-
-class TransactionsHandler(tornado.websocket.WebSocketHandler):
-    def open(self):
-        pass
- 
-    def on_message(self, message):
-        self.write_message(u"Your message was: " + message)
- 
-    def on_close(self):
-        pass
+async def helloworld(request):
+    name = request.match_info.get('name', "Anonymous")
+    text = "Hello, " + name
+    return web.Response(text=text)

@@ -1,22 +1,17 @@
-import tornado.httpserver
-import tornado.ioloop
-import tornado.options
-import tornado.web
+from aiohttp import web
 import handlers
-from tornado.options import define, options
 
-define("port", default=8888, help="run on the given port", type=int)
+def setup_routes(app):
+    app.router.add_get('/', handlers.helloworld)
+    app.router.add_get('/transactions/', handlers.helloworld)
+    app.router.add_get('/hello/{name}', handlers.helloworld)
+    app.router.add_get('/ws/', handlers.helloworld)
+
 
 def main():
-    tornado.options.parse_command_line()
-    application = tornado.web.Application([
-        (r"/hello/", handlers.HelloWorld),
-        (r"/websocket/", handlers.WebsocketHandler),
-        (r"/transactions/", handlers.TransactionsHandler),
-    ])
-    http_server = tornado.httpserver.HTTPServer(application)
-    http_server.listen(options.port)
-    tornado.ioloop.IOLoop.current().start()
+    app = web.Application()
+    setup_routes(app)
+    web.run_app(app, host='127.0.0.1', port=8888)
 
 
 if __name__ == "__main__":
