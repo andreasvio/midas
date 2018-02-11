@@ -1,6 +1,8 @@
 import aiohttp
 import asyncio
 import json
+import aioredis
+from aioredis.pubsub import Receiver
 
 SUBSCRIBE = {
     "type": "subscribe",
@@ -32,23 +34,45 @@ UNSUBSCRIBE = {
     ]
 }
 
-MESSAGE_CAP = 100
+class GdaxFeed(object):
+    def __init__(self):
+        self.MESSAGE_CAP = 100
+        self.loop = asyncio.get_event_loop()
+        self.channel = 'feed.gdax.transactions'
 
-async def run():
-    global MESSAGE_CAP
-    session = aiohttp.ClientSession()
-    async with session.ws_connect(url='wss://ws-feed.gdax.com') as ws:
-        await subscribe(ws)
-        print('Subscribed')
-        while MESSAGE_CAP > 0:
-            msg = await ws.receive_json()
-            print('Received message {}'.format(msg))
-            MESSAGE_CAP = MESSAGE_CAP - 1
-    await session.close()
+    def start(self):
+        self.loop.run_until_complete(self.receive())
+        self.loop.run_until_complete(self.run())
+        
+   
+    async def subscribe(self, ws):
+        ws.send_json(SUBSCRIBE)
 
-async def subscribe(ws):
-    ws.send_json(SUBSCRIBE)
+    async def receive(self):
+        print('Receive from redis')
+        sub = await aioredis.create_connection(('localhost', 6379))
+        receiver = Receiver()
+        sub.execute_pubsub('subscribe', receiver.channel(self.channel))
+        while (await receiver.wait_message()):
+            msg = await receiver.get()
+            print("Got Message:", msg)
+
+    async def run(self):
+        pub = await aioredis.create_connection(('localhost', 6379))
+        
+        session = aiohttp.ClientSession()
+        async with session.ws_connect(url='wss://ws-feed.gdax.com') as ws:
+            await self.subscribe(ws)
+            print('Subscribed')
+            while self.MESSAGE_CAP > 0:
+                msg = await ws.receive_json()
+                
+                res = await pub.execute('publish' ,self.channel, 'HELLO')
+                print('Publish to redis, {}'.format(res))
+                # print('Received message {}'.format(msg))
+                self.MESSAGE_CAP = self.MESSAGE_CAP - 1
+        await session.close()
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run())
+    feed = GdaxFeed()
+    feed.start()
