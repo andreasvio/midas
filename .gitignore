@@ -24,6 +24,9 @@ yarn-error.log*
 # production
 */build
 
+# redis
+*.rdb
+
 # complied
 *.pyc
 
