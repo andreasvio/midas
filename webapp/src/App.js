@@ -7,7 +7,8 @@ class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      response: ''
+      response: '',
+      messages: []
     };
   }
 
@@ -15,6 +16,17 @@ class App extends Component {
     this.callApi()
       .then(res => this.setState({ response: res.first_name }))
       .catch(err => console.log(err));
+
+      var ws = new WebSocket("ws://localhost:8888/echo/");
+        ws.onopen = function() {
+        ws.send("Hello, world");
+      };
+      ws.onmessage = evt => { 
+        // add the new message to state
+          this.setState({
+          messages : this.state.messages.concat([ evt.data ])
+        })
+      };
   }
 
   callApi = async () => {
@@ -35,6 +47,7 @@ class App extends Component {
         </header>
         <p className="App-intro">{this.state.response}</p>
         <p className="App-intro">{this.props.in1}</p>
+        <ul>{ this.state.messages.map( (msg, idx) => <li key={'msg-' + idx }>{ msg }</li> )}</ul>
       </div>
     );
   }
