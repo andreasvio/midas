@@ -1,5 +1,2 @@
-# ~/bin/kafka
-#!/bin/bash
-
-zkServer stop
-~/bin/kafka-server-stop /usr/local/etc/kafka/server.properties
+brew services stop kafka
+brew services stop zookeeper
