@@ -5,6 +5,8 @@ import tornado.gen
 from tornado.websocket import websocket_connect
 import json
 import time
+import asyncio
+from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 MAX_UPDATE_COUNT = 10000
 
@@ -38,23 +40,55 @@ UNSUBSCRIBE = {
     ]
 }
 
+async def send_one(msg):
+    producer = AIOKafkaProducer(
+        loop=tornado.ioloop.IOLoop.current().asyncio_loop, bootstrap_servers='localhost:9092')
+    # Get cluster layout and initial topic/partition leadership information
+    await producer.start()
+    try:
+        # Produce message
+        print('Sending message')
+        await producer.send_and_wait("testing_topic", msg)
+    finally:
+        # Wait for all pending messages to be delivered or expire.
+        await producer.stop()
+
+async def consume():
+    consumer = AIOKafkaConsumer('testing_topic', loop=tornado.ioloop.IOLoop.current().asyncio_loop, bootstrap_servers='localhost:9092')
+    # Get cluster layout and join group `my-group`
+    await consumer.start()
+    try:
+        # Consume messages
+        async for msg in consumer:
+            print("consumed: ", msg)
+    finally:
+        # Will leave consumer group; perform autocommit if enabled.
+        await consumer.stop()
 
 class WSClient(tornado.websocket.WebSocketHandler):
     clients = set()
 
     def __init__(self, url):
         self.url = url
-        self.ioloop = tornado.ioloop.IOLoop.current()
         self.conn = None
         self.count = 0
+        self.loop = tornado.ioloop.IOLoop.current()
+        self.producer = AIOKafkaProducer(
+            loop=tornado.ioloop.IOLoop.current().asyncio_loop, 
+            bootstrap_servers='localhost:9092',
+            value_serializer=self.serializer
+        )
 
-    def start(self):
+    def serializer(self, value):
+        return json.dumps(value).encode()
+
+    async def start(self):
         websocket_connect(
             self.url,
-            self.ioloop,
             callback=self.on_connected,
             on_message_callback=self.on_message)
-        self.ioloop.start()
+        await self.producer.start()
+        
 
     def on_connected(self, conn):
         try:
@@ -63,17 +97,19 @@ class WSClient(tornado.websocket.WebSocketHandler):
             self.conn.write_message(json.dumps(SUBSCRIBE))
         except Exception as e:
             print(str(e))
-            self.ioloop.stop()
+            tornado.ioloop.IOLoop.current().stop()
 
     def on_message(self, data):
         msg = json.loads(data)
         try:
             if msg['type'] == 'received':
-                getattr(self, 'on_{}'.format(msg['type']))(msg)
-                time.sleep(0.5)
+                # getattr(self, 'on_{}'.format(msg['type']))(msg)
+                self.loop.spawn_callback(self.producer.send_and_wait,'testing_topic',msg)
+                print('Message sent')
+                # time.sleep(2)
         except:
             print(msg)
-            self.ioloop.stop()
+            tornado.ioloop.IOLoop.current().stop()
         else:
             self.count += 1
             if self.count == MAX_UPDATE_COUNT:
@@ -81,13 +117,13 @@ class WSClient(tornado.websocket.WebSocketHandler):
                 self.conn.write_message(json.dumps(UNSUBSCRIBE))
             if self.count > MAX_UPDATE_COUNT:
                 print('*** STOP ***')
-                self.ioloop.stop()
+                tornado.ioloop.IOLoop.current().stop()
 
     # any response
     def on_error(self, msg):
         print('error', msg['message'], msg['original'])
         print('*** STOP ***')
-        self.ioloop.stop()
+        tornado.ioloop.IOLoop.current().stop()
 
     # subscribe response
     def on_subscriptions(self, msg):
@@ -120,8 +156,6 @@ class WSClient(tornado.websocket.WebSocketHandler):
         # order: (+price,-funds)
         # cash?: (-price,+funds) -- maybe size
         print('received', msg['product_id'], msg['sequence'], msg['time'], msg.get('price'), msg['side'], msg.get('size'), msg['order_id'], msg['order_type'], msg.get('funds'))
-        for client in self.clients:
-            client.write_message(msg)
 
     # update channel=full
     def on_open(self, msg):
@@ -139,4 +173,11 @@ class WSClient(tornado.websocket.WebSocketHandler):
 
 if __name__ == '__main__':
     wsc = WSClient('wss://ws-feed.gdax.com')
-    wsc.start()
+    # wsc.start()
+    loop = tornado.ioloop.IOLoop.current()
+    # loop.spawn_callback(send_one, b'a string here')
+    # loop.spawn_callback(consume)
+    loop.spawn_callback(wsc.start)
+    loop.spawn_callback(consume)
+    tornado.ioloop.IOLoop.current().start()
+    
